@@ -1,54 +1,45 @@
-const express = require("express");
-const validUrl = require("valid-url");
-const shortid = require("shortid");
+const express = require('express');
+const shortid = require('shortid');
+const bodyParser = require('body-parser');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const port = 3000;
 
-// In-memory storage for URLs (can be replaced with a database)
-let urlDatabase = {};
+const urlDatabase = {}; // Store URL mappings
 
-// Middleware to parse JSON requests
-app.use(express.json());
+app.use(bodyParser.json());
 
-// Route for the base URL
-app.get("/", (req, res) => {
-  res.send({
-    message: "Welcome to the URL Shortener Microservice! Use the /api/shorten endpoint.",
+// POST: Create a short URL
+app.post('/api/shorturl', (req, res) => {
+  const { url } = req.body;
+
+  // Validate the URL
+  const validUrlRegex = /^(https?:\/\/)(www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,6}(\/[a-zA-Z0-9-]+)*\/?$/;
+  if (!validUrlRegex.test(url)) {
+    return res.json({ error: 'invalid url' });
+  }
+
+  const shortUrl = shortid.generate();
+  urlDatabase[shortUrl] = url;
+
+  res.json({
+    original_url: url,
+    short_url: shortUrl
   });
 });
 
-// Route to shorten the URL
-app.post("/api/shorten", (req, res) => {
-  const { longUrl } = req.body;
-
-  // Validate the URL
-  if (!validUrl.isUri(longUrl)) {
-    return res.status(400).json({ error: "Invalid URL" });
-  }
-
-  // Generate a short URL
-  const shortUrlCode = shortid.generate();
-  urlDatabase[shortUrlCode] = longUrl;
-
-  // Return the shortened URL
-  const shortUrl = `${req.protocol}://${req.get("host")}/api/${shortUrlCode}`;
-  res.json({ original_url: longUrl, short_url: shortUrl });
-});
-
-// Route to handle redirection
-app.get("/api/:shortUrlCode", (req, res) => {
-  const shortUrlCode = req.params.shortUrlCode;
-
-  // Check if the short URL exists
-  if (urlDatabase[shortUrlCode]) {
-    res.redirect(urlDatabase[shortUrlCode]);
+// GET: Redirect to the original URL
+app.get('/api/shorturl/:shortUrl', (req, res) => {
+  const shortUrl = req.params.shortUrl;
+  const originalUrl = urlDatabase[shortUrl];
+  
+  if (originalUrl) {
+    return res.redirect(originalUrl);
   } else {
-    res.status(404).json({ error: "Short URL not found" });
+    return res.json({ error: 'No short URL found for the given input' });
   }
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+app.listen(port, () => {
+  console.log(`URL shortener listening at http://localhost:${port}`);
 });
